@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from lerobot.cameras import make_cameras_from_configs
 from lerobot.utils.decorators import check_if_already_connected, check_if_not_connected
 
 from ..robot import Robot
@@ -44,6 +45,7 @@ class GalaxeaA1ZFollower(Robot):
         self._grip_max = None
         super().__init__(config)
         self.config = config
+        self.cameras = make_cameras_from_configs(config.cameras)
         self._robot = None       # a1z ArmRobot (6 joints)
         self._grip = None        # MotorB gripper
         self._grip_bus = None
@@ -67,8 +69,19 @@ class GalaxeaA1ZFollower(Robot):
         return ft
 
     @property
-    def observation_features(self) -> dict[str, type]:
-        return self._joints_ft
+    def _cameras_ft(self) -> dict[str, tuple]:
+        features: dict[str, tuple] = {}
+        for cam in self.cameras:
+            cfg = self.config.cameras[cam]
+            if getattr(cfg, "use_rgb", True):
+                features[cam] = (cfg.height, cfg.width, 3)
+            if getattr(cfg, "use_depth", False):
+                features[f"{cam}_depth"] = (cfg.height, cfg.width, 1)
+        return features
+
+    @property
+    def observation_features(self) -> dict[str, type | tuple]:
+        return {**self._joints_ft, **self._cameras_ft}
 
     @property
     def action_features(self) -> dict[str, type]:
@@ -76,7 +89,8 @@ class GalaxeaA1ZFollower(Robot):
 
     @property
     def is_connected(self) -> bool:
-        return self._robot is not None and self._robot.is_running
+        cams_ok = all(cam.is_connected for cam in self.cameras.values())
+        return self._robot is not None and self._robot.is_running and cams_ok
 
     # ---- gripper helpers ----
     def _open_gripper(self) -> None:
@@ -130,6 +144,9 @@ class GalaxeaA1ZFollower(Robot):
 
         if self._has_grip:
             self._open_gripper()
+
+        for cam in self.cameras.values():
+            cam.connect()
 
         if not self.is_calibrated and calibrate:
             logger.info(f"{self} not calibrated; running calibration.")
@@ -224,6 +241,11 @@ class GalaxeaA1ZFollower(Robot):
         if self._has_grip:
             gp = self._read_grip_pos(timeout=0.005)
             obs["gripper.pos"] = float(gp if gp is not None else (self._grip_cmd or 0.0))
+        for cam_key, cam in self.cameras.items():
+            if getattr(cam, "use_rgb", True):
+                obs[cam_key] = cam.read_latest()
+            if getattr(cam, "use_depth", False):
+                obs[f"{cam_key}_depth"] = cam.read_latest_depth()
         return obs
 
     def _resolve_target(self, action: dict[str, float]) -> np.ndarray:
@@ -319,6 +341,11 @@ class GalaxeaA1ZFollower(Robot):
                 self._robot.stop()
             finally:
                 self._robot = None
+        for cam in self.cameras.values():
+            try:
+                cam.disconnect()
+            except Exception:  # nosec B110
+                pass
         logger.info(f"{self} disconnected.")
 
     def estop(self) -> None:

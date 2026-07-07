@@ -6,6 +6,8 @@
 
 from dataclasses import dataclass, field
 
+from lerobot.cameras import CameraConfig
+
 from ..config import RobotConfig
 
 
@@ -55,6 +57,12 @@ class GalaxeaA1ZFollowerConfig(RobotConfig):
     #   (zero for alignment, range for the clamp). Responsive, not range-compressed.
     # "rad": treat incoming action as native radians (no mapping).
     teleop_input: str = "leader_deg"
+    # Cameras (e.g. wrist Orbbec Gemini 305). Captured into observations and shown in
+    # rerun with ``--display_data=true``. Example:
+    #   --robot.cameras='{ wrist: {type: orbbec, serial_number_or_name: "CV2856D0006R",
+    #                              use_depth: true} }'
+    cameras: dict[str, CameraConfig] = field(default_factory=dict)
+
     # Per-joint direction (+1 / -1).
     joint_sign: list[int] = field(default_factory=lambda: [1, 1, 1, 1, 1, 1])
     # Leader->follower angle gain (1.0 = 1:1 degrees).
