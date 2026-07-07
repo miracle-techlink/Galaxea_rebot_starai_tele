@@ -257,5 +257,40 @@ python "/home/tommyzihao/ROBOT ARM/teleop_starai_to_rebot.py" --go --flip 3,4,5 
 > --robot.port=can5 --robot.can_adapter=socketcan --robot.id=follower1 --teleop.type=rebot_arm_102_leader
 > --teleop.port=/dev/ttyUSB0 --teleop.id=...`(相机同 §3.7)。
 
-### 8.5 目标:一个 StarAI 同驱两臂(Galaxea+reBot)
-待单臂各自验证后,写双臂桥接(读一次 StarAI → 同时映射发 Galaxea.send_action + reBot.send_action)。**先单验,再合双。**
+### 8.5 一个 StarAI 同驱两臂(Galaxea+reBot)—— `dual_follower` 组合插件 ✅
+
+已封装成标准 LeRobot `Robot` 插件 **`dual_follower`**(`lerobot_plugins/robots/dual_follower/`),内部同时构造
+`GalaxeaA1ZFollower` + `SeeedB601RSFollower`,`send_action` 里读一次主臂 → 同时喂两臂,`get_observation`
+汇总两臂关节 + 双腕相机。直接用官方 CLI:
+
+```bash
+# 遥操作(封装脚本已设 PATH/相机/flip;Ctrl-C 停,两臂自动归位)
+conda activate lerobot && bash scripts/teleop_dual.sh
+# 采集数据集
+REPO_ID=me/dual_pick TASK="pick the cube" EPISODES=20 bash scripts/record_dual.sh
+# 等价原始命令
+lerobot-teleoperate --robot.type=dual_follower --robot.id=dual1 --robot.galaxea_flip="1,5,6" \
+  --robot.cameras="{ galaxea_wrist: {type: orbbec, serial_number_or_name: CV2856D0006R, fps: 30, width: 640, height: 480, color_format: mjpg}, rebot_wrist: {type: orbbec, serial_number_or_name: CV275610002L, fps: 30, width: 640, height: 480, color_format: mjpg} }" \
+  --teleop.type=starai_violin_leader --teleop.port=/dev/ttyCH341USB0 --teleop.id=leader1 \
+  --fps=30 --display_data=true
+```
+
+**映射修复(关键)——home 锚点 1:1 增量**:Galaxea 的 `leader_deg` 是 `目标 = 自身home + sign·scale·leader角度`
+(见 `galaxea_a1z_follower._resolve_target`)。旧 reBot 映射 `目标 = gain·leader角度`(零位对齐、无偏移)**是错的**:
+gain≠1 幅度与 Galaxea 不一致;reBot 单边关节(`shoulder_lift[0,170]`/`elbow_flex[0,200]`)遇主臂负角被夹到 0 出现死区。
+现在 reBot 也锚在自身启动姿态:
+
+```
+reBot目标[i] = rb_home[i] + sign[i]·scale·(leader角度[i] − leader起始[i])
+```
+
+`rb_home` = 连接时 `rebot.get_observation()`(绝对度),`leader起始` = 首帧主臂读数。默认 `scale=1` → 与 Galaxea
+同款 1:1、幅度一致、无死区、**启动无跳变**(所以 `rebot_no_limit` 起步也安全)。退出 reBot 平滑回 `rb_home`
+(不回 0,reBot 的 0 对 shoulder_lift 是限位),Galaxea 走自身 `return_to_zero_on_exit`。
+
+> legacy 快捷入口 `scripts/teleop_starai_to_both.py`(argparse,含同款 home 锚点修复)等价,不依赖官方 CLI。
+> **注意**:新映射下 reBot **不要**再加 `--match-range`——默认就是 1:1,加了反而缩放不一致。
+
+**相机 / rerun 坑**:两个 Gemini 305 若都在 USB2,未压缩流会撑爆带宽 → 取帧 8s 超时崩溃,**务必 `color_format: mjpg`**;
+反复启停后管线可能挂起,`python scripts/usbreset_orbbec.py` 软复位(免拔插)。rerun viewer 二进制与 env python 同目录,
+封装脚本已把它加进 `PATH`(手敲官方 CLI 时 `export PATH=$(dirname $(which python)):$PATH`)。

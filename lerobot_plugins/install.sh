@@ -9,6 +9,7 @@ LB="$LEROBOT_SRC/src/lerobot"
 
 echo "[plugins] 复制插件到 $LB"
 cp -r "$HERE/robots/galaxea_a1z_follower" "$LB/robots/"
+cp -r "$HERE/robots/dual_follower" "$LB/robots/"
 cp -r "$HERE/teleoperators/starai_violin_leader" "$LB/teleoperators/"
 
 # 幂等地在 __init__.py 追加注册导入
@@ -17,5 +18,7 @@ add_import() {
   grep -qF "$line" "$f" || echo "$line" >> "$f"
 }
 add_import "$LB/robots/__init__.py" "from . import galaxea_a1z_follower  # noqa: F401"
+# dual_follower 依赖 galaxea_a1z_follower(树内)+ lerobot_robot_seeed_b601(pip, 懒加载)
+add_import "$LB/robots/__init__.py" "from . import dual_follower  # noqa: F401"
 add_import "$LB/teleoperators/__init__.py" "from . import starai_violin_leader  # noqa: F401"
-echo "[plugins] 完成。type: galaxea_a1z_follower / starai_violin_leader 已注册。"
+echo "[plugins] 完成。type: galaxea_a1z_follower / dual_follower / starai_violin_leader 已注册。"
