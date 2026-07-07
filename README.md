@@ -1,5 +1,7 @@
 # Galaxea / reBot × StarAI Teleop — 一主同驱双臂遥操作(LeRobot)
 
+[English](README_EN.md) · [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 用一支 **StarAI Violin** 主臂(7 舵机含夹爪),**同时镜像遥操作两条从臂**:
 
 - **星海图 Galaxea A1Z**(6 关节 + 夹爪,CAN,MIT 力控)
@@ -113,6 +115,19 @@ sudo ip link set can5 up type can bitrate 1000000 restart-ms 100   # reBot (PCAN
 - **Galaxea 每个关节都偏**:多半重标过主臂 `leader1` 改了零位 → 重标 Galaxea 零位对齐;方向 `joint_sign` 不在标定文件里(是运行时参数,别丢,已记 docs)。
 - **Galaxea 慢**:放开 `--galaxea-max-vel-deg-s`(默认 90,可到 120~150)。
 - **相机 openUsbDevice failed**:装 Orbbec udev 规则(setup 会装);Gemini 305 带深度在 **USB2** 上不稳,建议插 USB3,或 `color_format=mjpg`。
+
+## 维护 / 更新(本地开发)
+
+日常在 `~/ROBOT ARM/` 里调试;要把改动发布到本 repo:
+
+```bash
+cd ~/Galaxea_rebot_starai_tele
+bash sync.sh                                   # 从 ~/ROBOT ARM + lerobot 源码同步进 repo(自动去硬编码路径)
+git add -A && git commit -m "更新: ..."
+bash push.sh                                   # 直连 github 推送(绕过全局 ghfast 只读镜像)
+```
+
+> 本机全局配了 `ghfast.top` 镜像加速(只读),普通 `git push` 会打到只读镜像失败;`push.sh` 已处理。
 
 ## 许可 / 来源
 - `lerobot_plugins/` 本项目原创(LeRobot Apache-2.0 风格)。
